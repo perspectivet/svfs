@@ -9,7 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xlucas/swift"
+//	"github.com/xlucas/swift"
+	"github.com/perspectivet/swift"
 )
 
 var ctx = &Ctx{

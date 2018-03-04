@@ -14,11 +14,13 @@ import (
 	fusefs "bazil.org/fuse/fs"
 	"github.com/Sirupsen/logrus"
 	"github.com/fatih/color"
-	"github.com/ovh/svfs/config"
-	"github.com/ovh/svfs/svfs"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/xlucas/swift"
+//	"github.com/ovh/svfs/config"
+//	"github.com/ovh/svfs/svfs"
+	"svfs/config"
+	"svfs/svfs"
+	"github.com/perspectivet/swift"
 )
 
 var (

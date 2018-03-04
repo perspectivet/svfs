@@ -9,7 +9,8 @@ import (
 
 	"bazil.org/fuse"
 
-	"github.com/xlucas/swift"
+//	"github.com/xlucas/swift"
+	"github.com/perspectivet/swift"
 )
 
 func canonicalHeaderKey(header string) string {
@@ -17,6 +18,8 @@ func canonicalHeaderKey(header string) string {
 }
 
 func newReader(fh *ObjectHandle) (io.ReadSeeker, error) {
+	fmt.Printf("----------\nnewReader()\n%+v\n--------\n%+v\nn", SwiftConnection, SwiftConnection.Auth)
+
 	rd, _, err := SwiftConnection.ObjectOpen(fh.target.c.Name, fh.target.path, false, nil)
 	return rd, err
 }

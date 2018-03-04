@@ -9,7 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/xlucas/swift"
+//	"github.com/xlucas/swift"
+	"github.com/perspectivet/swift"
 )
 
 const (

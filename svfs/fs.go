@@ -1,11 +1,15 @@
 package svfs
 
 import (
+	"fmt"
 	"time"
 
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
-	"github.com/xlucas/swift"
+
+//	"github.com/xlucas/swift"
+	"github.com/perspectivet/swift"
+
 	"golang.org/x/net/context"
 )
 
@@ -75,6 +79,7 @@ type SVFS struct{}
 // services and make sure authentication in Swift has succeeded.
 func (s *SVFS) Init() (err error) {
 	// Copy storage URL option
+	fmt.Printf("\n----------\nInit0()\n%+v\n", SwiftConnection)
 	overloadStorageURL := SwiftConnection.StorageUrl
 
 	// Use file times set by hubic synchronization clients
@@ -96,9 +101,12 @@ func (s *SVFS) Init() (err error) {
 	}
 
 	// Swift ACL special authentication
+	fmt.Printf("\n----------\nInit1(%s)\n%+v\n", overloadStorageURL, SwiftConnection)
 	if overloadStorageURL != "" {
+
 		SwiftConnection.StorageUrl = overloadStorageURL
 		SwiftConnection.Auth = newSwiftACLAuth(SwiftConnection.Auth, overloadStorageURL)
+		fmt.Printf("----------\nInit2()\n%+v\n--------\n%+v\nn", SwiftConnection, SwiftConnection.Auth)
 	}
 
 	return err
@@ -124,18 +132,39 @@ func (s *SVFS) Root() (fs.Node, error) {
 // to the host. If the target account is using quota it will be reported as the device size.
 // If no quota was found the device size will be equal to the underlying type maximum value.
 func (s *SVFS) Statfs(ctx context.Context, req *fuse.StatfsRequest, resp *fuse.StatfsResponse) error {
-	account, _, err := SwiftConnection.Account()
-	if err != nil {
-		return err
-	}
+
+	var accountQuota int64 = 0
 
 	resp.Bsize = uint32(BlockSize)
 
-	// Not mounting a specific container, then get account
-	// information.
-	if TargetContainer == "" {
-		resp.Files = uint64(account.Objects)
-		resp.Blocks = uint64(account.BytesUsed) / uint64(resp.Bsize)
+	//only try to read the account if this is not a nilAuth mount
+	if SwiftConnection.AuthVersion >= 0 {
+		account, _, err := SwiftConnection.Account()
+		if err != nil {
+			return err
+		}
+
+
+		// Not mounting a specific container, then get account
+		// information.
+		if TargetContainer == "" {
+			resp.Files = uint64(account.Objects)
+			resp.Blocks = uint64(account.BytesUsed) / uint64(resp.Bsize)
+		}
+
+
+		// An account quota has been set, compute relative free space.
+		if account.Quota > 0 {
+			accountQuota= account.Quota
+
+			resp.Bavail = uint64(account.Quota-account.BytesUsed) / uint64(resp.Bsize)
+			resp.Bfree = resp.Bavail
+			if TargetContainer == "" {
+				resp.Blocks = uint64(account.Quota) / uint64(resp.Bsize)
+			} else {
+				resp.Blocks = uint64(account.Quota-account.BytesUsed)/uint64(resp.Bsize) + resp.Blocks
+			}
+		}
 	}
 	// Mounting a specific container, then get container usage.
 	if TargetContainer != "" {
@@ -143,23 +172,24 @@ func (s *SVFS) Statfs(ctx context.Context, req *fuse.StatfsRequest, resp *fuse.S
 		if err != nil {
 			return err
 		}
-		cs, _, err := SwiftConnection.Container(TargetContainer + segmentContainerSuffix)
-		if err != nil {
-			return err
-		}
-		resp.Files = uint64(c.Count)
-		resp.Blocks = uint64(c.Bytes+cs.Bytes) / uint64(resp.Bsize)
-	}
-	// An account quota has been set, compute relative free space.
-	if account.Quota > 0 {
-		resp.Bavail = uint64(account.Quota-account.BytesUsed) / uint64(resp.Bsize)
-		resp.Bfree = resp.Bavail
-		if TargetContainer == "" {
-			resp.Blocks = uint64(account.Quota) / uint64(resp.Bsize)
+
+
+		if SwiftConnection.AuthVersion >= 0 {
+			cs, _, err := SwiftConnection.Container(TargetContainer + segmentContainerSuffix)
+
+			if err != nil {
+				return err
+			}
+			resp.Files = uint64(c.Count)
+			resp.Blocks = uint64(c.Bytes+cs.Bytes) / uint64(resp.Bsize)
 		} else {
-			resp.Blocks = uint64(account.Quota-account.BytesUsed)/uint64(resp.Bsize) + resp.Blocks
+			resp.Files = uint64(c.Count)
+			resp.Blocks = uint64(c.Bytes) / uint64(resp.Bsize)
 		}
-	} else {
+
+	}
+
+	if accountQuota <= 0 {
 		// Else there's theorically no limit to available storage space.
 		used := resp.Blocks
 		resp.Blocks = uint64(1<<63-1) / uint64(resp.Bsize)
@@ -171,30 +201,40 @@ func (s *SVFS) Statfs(ctx context.Context, req *fuse.StatfsRequest, resp *fuse.S
 }
 
 func (s *SVFS) rootContainer(container string) (fs.Node, error) {
+
 	baseContainer, _, err := SwiftConnection.Container(container)
 	if err != nil {
 		return nil, err
 	}
 
-	// Find segment container too
-	segmentContainerName := container + segmentContainerSuffix
-	segmentContainer, _, err := SwiftConnection.Container(segmentContainerName)
+	if ! ReadOnly {
+		// Find segment container too
+		segmentContainerName := container + segmentContainerSuffix
+		segmentContainer, _, err := SwiftConnection.Container(segmentContainerName)
 
-	// Create it if missing
-	if err == swift.ContainerNotFound {
-		var container *swift.Container
-		container, err = createContainer(segmentContainerName)
-		segmentContainer = *container
-	}
-	if err != nil && err != swift.ContainerNotFound {
-		return nil, err
-	}
+		// Create it if missing
+		if err == swift.ContainerNotFound {
+			var container *swift.Container
+			container, err = createContainer(segmentContainerName)
+			segmentContainer = *container
+		}
+		if err != nil && err != swift.ContainerNotFound {
+			return nil, err
+		}
 
-	return &Directory{
-		apex: true,
-		c:    &baseContainer,
-		cs:   &segmentContainer,
-	}, nil
+		return &Directory{
+			apex: true,
+			c:    &baseContainer,
+			cs:   &segmentContainer,
+		}, nil
+	} else {
+		return &Directory{
+			apex: true,
+			c:    &baseContainer,
+			cs:   nil,
+		}, nil
+
+	}
 }
 
 var (

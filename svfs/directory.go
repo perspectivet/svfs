@@ -7,10 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xlucas/swift"
+//	"github.com/xlucas/swift"
+	"github.com/perspectivet/swift"
 
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
+
 	"golang.org/x/net/context"
 )
 
@@ -120,11 +122,16 @@ func (d *Directory) ReadDirAll(ctx context.Context) (direntries []fuse.Dirent, e
 		return direntries, nil
 	}
 
+	fmt.Printf("ReadDirAll()\n%+v", SwiftConnection)
+
 	// Fetch objects
 	objects, err := SwiftConnection.ObjectsAll(d.c.Name, &swift.ObjectsOpts{
 		Delimiter: '/',
 		Prefix:    d.path,
 	})
+
+	fmt.Printf("ReadDirAll2()\n%+v", SwiftConnection)
+
 	if err != nil {
 		return nil, err
 	}
@@ -217,6 +224,8 @@ func (d *Directory) ReadDirAll(ctx context.Context) (direntries []fuse.Dirent, e
 
 	directoryCache.AddAll(d.c.Name, d.path, d, children)
 
+	fmt.Printf("ReadDirAll3()\n%+v", SwiftConnection)
+
 	return direntries, nil
 }
 
@@ -236,15 +245,20 @@ func (d *Directory) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node
 // match the requested direnty after this operation.
 // It returns ENOENT if not found.
 func (d *Directory) Lookup(ctx context.Context, req *fuse.LookupRequest, resp *fuse.LookupResponse) (fs.Node, error) {
+	fmt.Printf("----------\nLookup1()\n%+v\n--------\n%+v\nn", SwiftConnection, SwiftConnection.Auth)
 	if _, found := directoryCache.Peek(d.c.Name, d.path); !found {
 		d.ReadDirAll(ctx)
 	}
+
+	fmt.Printf("----------\nLookup()2\n%+v\n--------\n%+v\nn", SwiftConnection, SwiftConnection.Auth)
 	// Find matching child
 	if item := directoryCache.Get(d.c.Name, d.path, req.Name); item != nil {
 		if n, ok := item.(fs.Node); ok {
 			return n, nil
 		}
 	}
+
+	fmt.Printf("----------\nLookup()3\n%+v\n--------\n%+v\nn", SwiftConnection, SwiftConnection.Auth)
 
 	return nil, fuse.ENOENT
 }

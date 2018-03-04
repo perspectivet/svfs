@@ -7,7 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/xlucas/swift"
+//	"github.com/xlucas/swift"
+	"github.com/perspectivet/swift"
 )
 
 type ChangeCacheTestSuite struct {

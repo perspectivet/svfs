@@ -9,7 +9,8 @@ import (
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
 
-	"github.com/xlucas/swift"
+//	"github.com/xlucas/swift"
+	"github.com/perspectivet/swift"
 )
 
 const (
@@ -132,25 +133,27 @@ func (r *Root) ReadDirAll(ctx context.Context) (direntries []fuse.Dirent, err er
 		}
 	}
 
-	for _, baseContainer := range baseContainers {
-		c := baseContainer
-		// Create segment container if missing
-		if segmentContainers[c.Name] == nil {
-			segmentContainers[c.Name], err = createContainer(c.Name + segmentContainerSuffix)
-			if err != nil {
-				return nil, err
+	if ! ReadOnly {
+		for _, baseContainer := range baseContainers {
+			c := baseContainer
+			// Create segment container if missing
+			if segmentContainers[c.Name] == nil {
+				segmentContainers[c.Name], err = createContainer(c.Name + segmentContainerSuffix)
+				if err != nil {
+					return nil, err
+				}
 			}
-		}
 
-		// Register direntries and cache entries
-		child := &Directory{
-			c:    c,
-			cs:   segmentContainers[c.Name],
-			name: c.Name,
-		}
+			// Register direntries and cache entries
+			child := &Directory{
+				c:    c,
+				cs:   segmentContainers[c.Name],
+				name: c.Name,
+			}
 
-		children[c.Name] = child
-		direntries = append(direntries, child.Export())
+			children[c.Name] = child
+			direntries = append(direntries, child.Export())
+		}
 	}
 
 	directoryCache.AddAll("", r.path, r, children)

@@ -36,10 +36,12 @@ func handleFusermountStderr(errCh chan<- error) func(line string) (ignore bool) 
 				return true
 			default:
 				// not the first error; fall back to logging it
+				log.Printf("DEBUG: handleFusermountStderr(%v)",line)
 				return false
 			}
 		}
 
+		log.Printf("DEBUG: handleFusermountStderr2(%v)",line)
 		return false
 	}
 }
@@ -47,12 +49,17 @@ func handleFusermountStderr(errCh chan<- error) func(line string) (ignore bool) 
 // isBoringFusermountError returns whether the Wait error is
 // uninteresting; exit status 1 is.
 func isBoringFusermountError(err error) bool {
+
+	log.Printf("DEBUG: report boring...")
+
 	if err, ok := err.(*exec.ExitError); ok && err.Exited() {
 		if status, ok := err.Sys().(syscall.WaitStatus); ok && status.ExitStatus() == 1 {
+			log.Printf("DEBUG: report boring done.")
 			return true
 		}
 	}
 	return false
+
 }
 
 func mount(dir string, conf *mountConfig, ready chan<- struct{}, errp *error) (fusefd *os.File, err error) {
@@ -76,6 +83,9 @@ func mount(dir string, conf *mountConfig, ready chan<- struct{}, errp *error) (f
 		"--",
 		dir,
 	)
+
+	log.Printf("DEBUG: fusermount CMD(%s)",strings.Join(cmd.Args," "))
+
 	cmd.Env = append(os.Environ(), "_FUSE_COMMFD=3")
 
 	cmd.ExtraFiles = []*os.File{writeFile}
@@ -93,6 +103,9 @@ func mount(dir string, conf *mountConfig, ready chan<- struct{}, errp *error) (f
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("fusermount: %v", err)
 	}
+
+	log.Printf("DEBUG: mount reporting streams inited")
+
 	helperErrCh := make(chan error, 1)
 	wg.Add(2)
 	go lineLogger(&wg, "mount helper output", neverIgnoreLine, stdout)
@@ -115,6 +128,8 @@ func mount(dir string, conf *mountConfig, ready chan<- struct{}, errp *error) (f
 
 		return nil, fmt.Errorf("fusermount: %v", err)
 	}
+
+	log.Printf("DEBUG: mount inited")
 
 	c, err := net.FileConn(readFile)
 	if err != nil {

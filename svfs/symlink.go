@@ -5,7 +5,10 @@ import (
 
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
-	"github.com/xlucas/swift"
+
+//	"github.com/xlucas/swift"
+	"github.com/perspectivet/swift"
+
 	"golang.org/x/net/context"
 )
 
